@@ -124,14 +124,14 @@ def apply(dcr: TimedDcrGraph, parameters):
             for event_prime in dcr.milestones[event]:
                 create_edge(event, event_prime, 'milestone', viz)
 
-#region SOMETHING HERE
+#region apply nested group
 
-    for event in dcr.nestedgroups:
-        for event_prime in dcr.nestedgroups[event]:
-            time = None
-            if hasattr(dcr,'timedresponses') and event in dcr.timedresponses and event_prime in dcr.timedresponses[event]:
-                time = dcr.timedresponses[event][event_prime]
-            create_group(event, event_prime, 'nestedgroup', viz, time, font_size)
+    #for event in dcr.nestedgroups:
+    #    for event_prime in dcr.nestedgroups[event]:
+    #        time = None
+    #        if hasattr(dcr,'timedresponses') and event in dcr.timedresponses and event_prime in dcr.timedresponses[event]:
+    #            time = dcr.timedresponses[event][event_prime]
+    #        create_group(event, event_prime, 'nestedgroup', viz, time, font_size)
             
 #endregion
 
@@ -143,7 +143,7 @@ def apply(dcr: TimedDcrGraph, parameters):
 
 #region Making nesting groups
 
-def create_group(source, targets, viz, time = None, font_size = None,time_precision='D'):
+def create_group(source, targets, viz: Digraph, time = None, font_size = None,time_precision='D'):
     with viz.subgraph(name=source) as c:
         c.attr(style = "filled", color = "lightgrey")
         c.edges(targets)
