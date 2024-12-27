@@ -96,15 +96,7 @@ def apply(dcr: TimedDcrGraph, parameters):
         included_style = 'solid'
         if event not in dcr.marking.included:
             included_style = 'dashed'
-        if (event not in dcr.nestedgroups_map):
-            viz.node(event, label, style=included_style,font_size=font_size)
-            print("node:  " + event)
-        else:
-            viz.subgraph(name=event)
-            print("Subgraph:  " + event)
-            
-            
-        
+        viz.node(event, label, style=included_style,font_size=font_size)
     for event in dcr.conditions:
         for event_prime in dcr.conditions[event]:
             time = None
@@ -123,15 +115,6 @@ def apply(dcr: TimedDcrGraph, parameters):
     for event in dcr.excludes:
         for event_prime in dcr.excludes[event]:
             create_edge(event, event_prime, 'exclude', viz)
-
-    for event in dcr.nestedgroups_map:
-        with viz.subgraph(name=event) as s:
-            s.attr(label=event)
-            for event_prime in dcr.nestedgroups[event]:
-                s.node(event_prime)
-                  
-        #print()
-
     if hasattr(dcr, 'noresponses'):
         for event in dcr.noresponses:
             for event_prime in dcr.noresponses[event]:
@@ -140,50 +123,8 @@ def apply(dcr: TimedDcrGraph, parameters):
         for event in dcr.milestones:
             for event_prime in dcr.milestones[event]:
                 create_edge(event, event_prime, 'milestone', viz)
-
-#region apply nested group
-
-    #for event in dcr.nestedgroups:
-    #    for event_prime in dcr.nestedgroups[event]:
-    #        time = None
-    #        if hasattr(dcr,'timedresponses') and event in dcr.timedresponses and event_prime in dcr.timedresponses[event]:
-    #            time = dcr.timedresponses[event][event_prime]
-    #        create_group(event, event_prime, 'nestedgroup', viz, time, font_size)
-            
-#endregion
-
     viz.attr(overlap='false')
 
     viz.format = image_format.replace("html", "plain-text")
 
     return viz
-
-#region Making nesting groups
-
-def create_group(source, targets, viz: Digraph, time = None, font_size = None,time_precision='D'):
-    sg = viz.subgraph()
-    #with viz.subgraph(name=source) as c:
-    #    c.attr(style = "filled", color = "lightgrey")
-    #    c.edges(targets)
-    #    c.attr.
-
-
-
-    
-    if font_size:
-        font_size = int(font_size)
-        font_size = str(int(font_size - 2/3*font_size))
-    if time:
-        time = time_to_iso_string(time, time_precision)
-        match time_precision:
-            case 'D':
-                time = None if time=='P0D' else time
-            case 'H':
-                time = None if time=='P0DT0H' else time
-            case 'M':
-                time = None if time=='P0DT0H0M' else time
-            case 'S':
-                time = None if time=='P0DT0H0M0S' else time
-    return
-
-#endregion
