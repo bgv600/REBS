@@ -19,8 +19,8 @@ class Parameters(Enum):
     BGCOLOR = "bgcolor"
     DECORATIONS = "decorations"
 
-
-def create_edge(source, target, relation, viz, time = None, font_size = None,time_precision='D'):
+# Extended create_edge input to also include a head and tail for connecting to or from clusters
+def create_edge(source, target, relation, viz, time = None, font_size = None,time_precision='D', head = None, tail = None):
     viz.edge_attr['labeldistance'] = '0.0'
     if font_size:
         font_size = int(font_size)
@@ -37,16 +37,19 @@ def create_edge(source, target, relation, viz, time = None, font_size = None,tim
             case 'S':
                 time = None if time=='P0DT0H0M0S' else time
 
+    print(f"source: {source}")
+    print(f"target: {target}")
+
     match relation:
         case 'condition':
             if time:
-                viz.edge(source, target, color='#FFA500', arrowhead='dotnormal', label=time, labelfontsize=font_size)
+                viz.edge(source, target, color='#FFA500', arrowhead='dotnormal', label=time, labelfontsize=font_size) 
             else:
                 viz.edge(source, target, color='#FFA500', arrowhead='dotnormal')
         case 'exclude':
             viz.edge(source, target, color='#FC0C1B', arrowhead='normal', arrowtail='none', headlabel='%', labelfontcolor='#FC0C1B', labelfontsize='8')
         case 'include':
-            viz.edge(source, target, color='#30A627', arrowhead='normal', arrowtail='none', headlabel='+', labelfontcolor='#30A627', labelfontsize='10')
+            viz.edge(source, target, color='#30A627', arrowhead='normal', arrowtail='none', headlabel='+', labelfontcolor='#30A627', labelfontsize='10', ltail=tail, lhead=head)
         case 'response':
             if time:
                 viz.edge(source, target, color='#2993FC', arrowhead='normal', arrowtail='dot', dir='both', label=time, labelfontsize=font_size)
@@ -60,7 +63,7 @@ def create_edge(source, target, relation, viz, time = None, font_size = None,tim
 
 
 
-def apply(dcr: TimedDcrGraph, parameters):
+def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
     if parameters is None:
         parameters = {}
 
@@ -99,17 +102,21 @@ def apply(dcr: TimedDcrGraph, parameters):
     # Create nested clusters
     processed_groups = set()
 
-    def add_to_cluster(group_name, parent_graph):
+    def add_to_cluster(group_name, parent_graph:Digraph):
         if group_name in processed_groups:
             return
         processed_groups.add(group_name)
         
-        with parent_graph.subgraph(name='cluster_' + group_name) as s:
+        #with parent_graph.subgraph(name='cluster_' + group_name) as s:
+        with parent_graph.subgraph(name="cluster_"+group_name) as s:
+
             s.attr(label=group_name, style='rounded')
             
             # Add nodes and nested clusters to this cluster
             for member in dcr.nestedgroups[group_name]:
-                print(f"Printing the nodes we add to clusters: {member}")
+                print(f"Adding node: {member}, to cluster: {group_name}, cluster name: {s.name} ")
+                #print(f"name of group: {group_name}")
+                #print(f"{s.name}")
                 print()
                 if member in dcr.nestedgroups_map:
                     # This is a nested group, create a new cluster
@@ -131,6 +138,8 @@ def apply(dcr: TimedDcrGraph, parameters):
     # Add all relations, including those involving clusters
     for event in dcr.conditions:
         for event_prime in dcr.conditions[event]:
+
+
             time = None
             if hasattr(dcr, 'timedconditions') and event in dcr.timedconditions and event_prime in dcr.timedconditions[event]:
                 time = dcr.timedconditions[event][event_prime]
@@ -144,8 +153,41 @@ def apply(dcr: TimedDcrGraph, parameters):
             create_edge(event, event_prime, 'response', viz, time, font_size)
 
     for event in dcr.includes:
+        #region handles pointing from a cluster, using ltail from cluster and chainging the source to a node in said cluster
+        source = event
+        if event in dcr.nestedgroups_map:
+            grouplist = list(dcr.nestedgroups[event])
+            elem_s = grouplist[0]
+            i = 1
+            while elem_s in dcr.nestedgroups_map:
+                elem_s = grouplist[i]
+                i += 1
+            
+            source = elem_s
+            tail = "cluster_"+event
+        #endregion
+
+        
+
+
+
         for event_prime in dcr.includes[event]:
-            create_edge(event, event_prime, 'include', viz)
+            #region Handle pointing TO a cluster, pointing to a node in cluster and chainging lhead
+            target = event_prime
+            if event_prime in dcr.nestedgroups_map:
+                grouplist = list(dcr.nestedgroups[event_prime])
+                elem_t = grouplist[0]
+                i = 1
+                while elem_t in dcr.nestedgroups_map:
+                    elem_t = grouplist[i]
+                    i += 1
+                
+                target = elem_t
+                head = "cluster_"+event_prime
+
+            #endregion
+
+            create_edge(source, target, 'include', viz, tail=tail, head=head)
 
     for event in dcr.excludes:
         for event_prime in dcr.excludes[event]:
