@@ -135,11 +135,26 @@ def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
         if group not in processed_groups:
             add_to_cluster(group, viz)
 
+    def find_node_and_tail(event, i):
+        if event in dcr.nestedgroups_map:
+            grouplist = list(dcr.nestedgroups[event])
+            elem_s = grouplist[i]
+            print(f"Elem_s: {elem_s}")
+            if elem_s in dcr.nestedgroups_map:
+                return find_node_and_tail(elem_s, i+1)
+            else:
+                #tail = 'cluster_' + event
+                #print(f"tail: {tail}")
+                print(f"elem_s: {elem_s}")
+                return elem_s
+        else:
+            return event
+
+
+
     # Add all relations, including those involving clusters
     for event in dcr.conditions:
         for event_prime in dcr.conditions[event]:
-
-
             time = None
             if hasattr(dcr, 'timedconditions') and event in dcr.timedconditions and event_prime in dcr.timedconditions[event]:
                 time = dcr.timedconditions[event][event_prime]
@@ -154,23 +169,9 @@ def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
 
     for event in dcr.includes:
         #region handles pointing from a cluster, using ltail from cluster and chainging the source to a node in said cluster
-        source = event
-        if event in dcr.nestedgroups_map:
-            grouplist = list(dcr.nestedgroups[event])
-            elem_s = grouplist[0]
-            i = 1
-            while elem_s in dcr.nestedgroups_map:
-                elem_s = grouplist[i]
-                i += 1
-            
-            source = elem_s
-            tail = "cluster_"+event
+        tail = "cluster_"+event
+        source = find_node_and_tail(event, 0)
         #endregion
-
-        
-
-
-
         for event_prime in dcr.includes[event]:
             #region Handle pointing TO a cluster, pointing to a node in cluster and chainging lhead
             target = event_prime
@@ -184,7 +185,6 @@ def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
                 
                 target = elem_t
                 head = "cluster_"+event_prime
-
             #endregion
 
             create_edge(source, target, 'include', viz, tail=tail, head=head)
