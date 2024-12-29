@@ -59,6 +59,7 @@ def create_edge(source, target, relation, viz, time = None, font_size = None,tim
     return
 
 
+
 def apply(dcr: TimedDcrGraph, parameters):
     if parameters is None:
         parameters = {}
@@ -68,122 +69,99 @@ def apply(dcr: TimedDcrGraph, parameters):
     font_size = exec_utils.get_param_value(Parameters.FONT_SIZE, parameters, "12")
     bgcolor = exec_utils.get_param_value(Parameters.BGCOLOR, parameters, constants.DEFAULT_BGCOLOR)
 
-    viz = Digraph("", filename=filename.name, engine='dot', graph_attr={'bgcolor': bgcolor, 'rankdir': set_rankdir},
+    viz = Digraph("", filename=filename.name, engine='dot', graph_attr={'bgcolor': bgcolor, 'rankdir': set_rankdir,
+                                                                        'compound': 'true'},
                   node_attr={'shape': 'Mrecord'}, edge_attr={'arrowsize': '0.5'})
 
+    # Create regular nodes first
     for event in dcr.events:
-        label = None
-        try:
-            roles = []
-            key_list = list(dcr.role_assignments.keys())
-            value_list = list(dcr.role_assignments.values())
-            for count, value in enumerate(value_list):
-                if event in value:
-                    roles.append(key_list[count])
-            roles = ', '.join(roles)
-        except AttributeError:
-            roles = ''
-        pending_record = ''
-        if event in dcr.marking.pending:
-            pending_record = '!'
-        executed_record = ''
-        if event in dcr.marking.executed:
-            executed_record = '&#x2713;'
-        label_map = ''
-        if event in dcr.label_map:
-            label_map = dcr.label_map[event]
-        label = '{ ' + roles  + ' | ' + executed_record + ' ' + pending_record + ' } | { ' + label_map + ' }'
-        included_style = 'solid'
-        if event not in dcr.marking.included:
-            included_style = 'dashed'
-        if (event not in dcr.nestedgroups_map):
-            viz.node(event, label, style=included_style,font_size=font_size)
-            print("node:  " + event)
-        else:
-            viz.subgraph(name=event)
-            print("Subgraph:  " + event)
+        if event not in dcr.nestedgroups_map:
+            label = None
+            try:
+                roles = []
+                key_list = list(dcr.role_assignments.keys())
+                value_list = list(dcr.role_assignments.values())
+                for count, value in enumerate(value_list):
+                    if event in value:
+                        roles.append(key_list[count])
+                roles = ', '.join(roles)
+            except AttributeError:
+                roles = ''
             
+            pending_record = '!' if event in dcr.marking.pending else ''
+            executed_record = '&#x2713;' if event in dcr.marking.executed else ''
+            label_map = dcr.label_map[event] if event in dcr.label_map else ''
+            label = '{ ' + roles + ' | ' + executed_record + ' ' + pending_record + ' } | { ' + label_map + ' }'
             
+            included_style = 'solid' if event in dcr.marking.included else 'dashed'
+            viz.node(event, label, style=included_style, font_size=font_size)
+
+    # Create nested clusters
+    processed_groups = set()
+
+    def add_to_cluster(group_name, parent_graph):
+        if group_name in processed_groups:
+            return
+        processed_groups.add(group_name)
         
+        with parent_graph.subgraph(name='cluster_' + group_name) as s:
+            s.attr(label=group_name, style='rounded')
+            
+            # Add nodes and nested clusters to this cluster
+            for member in dcr.nestedgroups[group_name]:
+                print(f"Printing the nodes we add to clusters: {member}")
+                print()
+                if member in dcr.nestedgroups_map:
+                    # This is a nested group, create a new cluster
+                    add_to_cluster(member, s)
+                else:
+                    # This is a regular node, add it to current cluster
+                    pending_record = '!' if member in dcr.marking.pending else ''
+                    executed_record = '&#x2713;' if member in dcr.marking.executed else ''
+                    label_map = dcr.label_map[member] if member in dcr.label_map else ''
+                    label = '{ | ' + executed_record + ' ' + pending_record + ' } | { ' + label_map + ' }'
+                    included_style = 'solid' if member in dcr.marking.included else 'dashed'
+                    s.node(member, label, style=included_style, font_size=font_size)
+
+    # Create all clusters starting from top-level groups
+    for group in dcr.nestedgroups_map:
+        if group not in processed_groups:
+            add_to_cluster(group, viz)
+
+    # Add all relations, including those involving clusters
     for event in dcr.conditions:
         for event_prime in dcr.conditions[event]:
             time = None
-            if hasattr(dcr,'timedconditions') and event in dcr.timedconditions and event_prime in dcr.timedconditions[event]:
+            if hasattr(dcr, 'timedconditions') and event in dcr.timedconditions and event_prime in dcr.timedconditions[event]:
                 time = dcr.timedconditions[event][event_prime]
             create_edge(event_prime, event, 'condition', viz, time, font_size)
+
     for event in dcr.responses:
         for event_prime in dcr.responses[event]:
             time = None
-            if hasattr(dcr,'timedresponses') and event in dcr.timedresponses and event_prime in dcr.timedresponses[event]:
+            if hasattr(dcr, 'timedresponses') and event in dcr.timedresponses and event_prime in dcr.timedresponses[event]:
                 time = dcr.timedresponses[event][event_prime]
             create_edge(event, event_prime, 'response', viz, time, font_size)
+
     for event in dcr.includes:
         for event_prime in dcr.includes[event]:
             create_edge(event, event_prime, 'include', viz)
+
     for event in dcr.excludes:
         for event_prime in dcr.excludes[event]:
             create_edge(event, event_prime, 'exclude', viz)
-
-    for event in dcr.nestedgroups_map:
-        with viz.subgraph(name=event) as s:
-            s.attr(label=event)
-            for event_prime in dcr.nestedgroups[event]:
-                s.node(event_prime)
-                  
-        #print()
 
     if hasattr(dcr, 'noresponses'):
         for event in dcr.noresponses:
             for event_prime in dcr.noresponses[event]:
                 create_edge(event, event_prime, 'noresponse', viz)
+
     if hasattr(dcr, 'milestones'):
         for event in dcr.milestones:
             for event_prime in dcr.milestones[event]:
                 create_edge(event, event_prime, 'milestone', viz)
 
-#region apply nested group
-
-    #for event in dcr.nestedgroups:
-    #    for event_prime in dcr.nestedgroups[event]:
-    #        time = None
-    #        if hasattr(dcr,'timedresponses') and event in dcr.timedresponses and event_prime in dcr.timedresponses[event]:
-    #            time = dcr.timedresponses[event][event_prime]
-    #        create_group(event, event_prime, 'nestedgroup', viz, time, font_size)
-            
-#endregion
-
     viz.attr(overlap='false')
-
     viz.format = image_format.replace("html", "plain-text")
 
     return viz
-
-#region Making nesting groups
-
-def create_group(source, targets, viz: Digraph, time = None, font_size = None,time_precision='D'):
-    sg = viz.subgraph()
-    #with viz.subgraph(name=source) as c:
-    #    c.attr(style = "filled", color = "lightgrey")
-    #    c.edges(targets)
-    #    c.attr.
-
-
-
-    
-    if font_size:
-        font_size = int(font_size)
-        font_size = str(int(font_size - 2/3*font_size))
-    if time:
-        time = time_to_iso_string(time, time_precision)
-        match time_precision:
-            case 'D':
-                time = None if time=='P0D' else time
-            case 'H':
-                time = None if time=='P0DT0H' else time
-            case 'M':
-                time = None if time=='P0DT0H0M' else time
-            case 'S':
-                time = None if time=='P0DT0H0M0S' else time
-    return
-
-#endregion
