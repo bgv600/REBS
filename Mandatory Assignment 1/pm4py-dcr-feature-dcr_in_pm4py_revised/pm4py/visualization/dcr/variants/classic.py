@@ -178,11 +178,20 @@ def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
             create_edge(source, target, 'include', viz, tail=tail, head=head)
 
     for event in dcr.excludes:
-        tail = "cluster_"+event
+        print(f"Event: {event}")
+        print(f"groups map: {list[dcr.nestedgroups.keys()]}")
+        if event in list[dcr.nestedgroups.keys()]:
+            tail = "cluster_"+event
+        else:
+            tail = None
+        print(f"Tail: {tail}")
         source = find_head_or_tail(event, 0)
+        print(f"Source: {source}")
         for event_prime in dcr.excludes[event]:
+            print(f"Event prime: {event_prime}")
             head = "cluster_"+event_prime
             target = find_head_or_tail(event_prime, 0)
+            print(f"Target: {target}")
             create_edge(source, target, 'exclude', viz, tail=tail, head=head)
 
     if hasattr(dcr, 'noresponses'):
