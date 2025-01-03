@@ -56,9 +56,9 @@ def create_edge(source, target, relation, viz, time = None, font_size = None,tim
             else:
                 viz.edge(source, target, color='#2993FC', arrowhead='normal', arrowtail='dot', dir='both', lhead=head, ltail=tail)
         case 'noresponse':
-            viz.edge(source, target, color='#7A514D', arrowhead='normal', headlabel='x', labelfontcolor='#7A514D', labelfontsize='8', arrowtail='dot', dir='both')
+            viz.edge(source, target, color='#7A514D', arrowhead='normal', headlabel='x', labelfontcolor='#7A514D', labelfontsize='8', arrowtail='dot', dir='both', ltail=tail, lhead=head)
         case 'milestone':
-            viz.edge(source, target, color='#A932D0', arrowhead='normal', headlabel='&#9671;', labelfontcolor='#A932D0', labelfontsize='8', arrowtail='dot', dir='both')
+            viz.edge(source, target, color='#A932D0', arrowhead='normal', headlabel='&#9671;', labelfontcolor='#A932D0', labelfontsize='8', arrowtail='dot', dir='both', ltail=tail, lhead=head)
     return
 
 
@@ -106,26 +106,17 @@ def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
     def add_to_cluster(group_name, parent_graph):
         print(1)
         if group_name in processed_groups:
-            print("r")
             return
-        print("add")
         processed_groups.add(group_name)
         
         #with parent_graph.subgraph(name='cluster_' + group_name) as s:
         with parent_graph.subgraph(name="cluster_"+group_name) as s:
-            print("attr")
             s.attr(label=group_name, style='rounded')
             
             # Add nodes and nested clusters to this cluster
-            print("for")
             for member in dcr.nestedgroups[group_name]:
-                print(f"Adding node: {member}, to cluster: {group_name}, cluster name: {s.name} ")
-                #print(f"name of group: {group_name}")
-                #print(f"{s.name}")
-                print()
-                #if member in dcr.nestedgroups_map:
                 if member in dcr.nestedgroups:
-                    # This is a nested group, create a new cluster
+                    # Nested group, create a new cluster
                     add_to_cluster(member, s)
                 else:
                     # This is a regular node, add it to current cluster
@@ -137,28 +128,20 @@ def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
                     s.node(member, label, style=included_style, font_size=font_size)
 
     # Create all clusters starting from top-level groups
-    #for group in dcr.nestedgroups_map:
     for group in dcr.nestedgroups:
-
         if group not in processed_groups:
             add_to_cluster(group, viz)
 
     def find_head_or_tail(event, i):
-        #if event in dcr.nestedgroups_map:
         if event in dcr.nestedgroups:
             grouplist = list(dcr.nestedgroups[event])
             elem_s = grouplist[i]
-            print(f"Elem_s: {elem_s}")
-            #if elem_s in dcr.nestedgroups:
             if elem_s in dcr.nestedgroups:
                 return find_head_or_tail(elem_s, i+1)
             else:
-                print(f"elem_s: {elem_s}")
                 return elem_s
         else:
             return event
-
-
 
     # Add all relations, including those involving clusters
     for event in dcr.conditions:
@@ -173,43 +156,52 @@ def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
             create_edge(target, source, 'condition', viz, time, font_size, head=head, tail=tail)
 
     for event in dcr.responses:
-        head = "cluster_"+event
+        tail = "cluster_"+event
+        print(f"Tail: {tail}")
         source = find_head_or_tail(event, 0)
         for event_prime in dcr.responses[event]:
             time = None
-            tail = "cluster_"+event_prime
+            head = "cluster_"+event_prime
+            print(f"Head: {head}")
             target = find_head_or_tail(event_prime, 0)
-            if hasattr(dcr, 'timedresponses') and event in dcr.timedresponses and event_prime in dcr.timedresponses[event]:
-                time = dcr.timedresponses[event][event_prime]
+            if hasattr(dcr, 'timedconditions') and event in dcr.timedconditions and event_prime in dcr.timedconditions[event]:
+                time = dcr.timedconditions[event][event_prime]
             create_edge(source, target, 'response', viz, time, font_size, head=head, tail=tail)
+
 
     for event in dcr.includes:
         tail = "cluster_"+event
         source = find_head_or_tail(event, 0)
-
         for event_prime in dcr.includes[event]:
             head = "cluster_"+event_prime
             target = find_head_or_tail(event_prime, 0)    
-
             create_edge(source, target, 'include', viz, tail=tail, head=head)
 
     for event in dcr.excludes:
-        head = "cluster_"+event
+        tail = "cluster_"+event
         source = find_head_or_tail(event, 0)
         for event_prime in dcr.excludes[event]:
-            tail = "cluster_"+event_prime
+            head = "cluster_"+event_prime
             target = find_head_or_tail(event_prime, 0)
             create_edge(source, target, 'exclude', viz, tail=tail, head=head)
 
     if hasattr(dcr, 'noresponses'):
         for event in dcr.noresponses:
+            tail = "cluster_"+event
+            source = find_head_or_tail(event, 0)
             for event_prime in dcr.noresponses[event]:
+                head = "cluster_"+event
+                target = find_head_or_tail(event_prime, 0)
                 create_edge(event, event_prime, 'noresponse', viz)
 
     if hasattr(dcr, 'milestones'):
         for event in dcr.milestones:
+            tail = "cluster_"+event
+            source = find_head_or_tail(event, 0)
             for event_prime in dcr.milestones[event]:
-                create_edge(event, event_prime, 'milestone', viz)
+                head = "cluster_"+event_prime
+                target = find_head_or_tail(event_prime, 0)
+                create_edge(source, target, 'milestone', viz)
 
     viz.attr(overlap='false')
     viz.format = image_format.replace("html", "plain-text")
