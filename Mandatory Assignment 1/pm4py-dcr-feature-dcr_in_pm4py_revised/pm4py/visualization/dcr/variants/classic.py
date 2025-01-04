@@ -37,9 +37,6 @@ def create_edge(source, target, relation, viz, time = None, font_size = None,tim
             case 'S':
                 time = None if time=='P0DT0H0M0S' else time
 
-    print(f"source: {source}")
-    print(f"target: {target}")
-
     match relation:
         case 'condition':
             if time:
@@ -92,39 +89,52 @@ def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
             except AttributeError:
                 roles = ''
             
-            pending_record = '!' if event in dcr.marking.pending else ''
-            executed_record = '&#x2713;' if event in dcr.marking.executed else ''
-            label_map = dcr.label_map[event] if event in dcr.label_map else ''
-            label = '{ ' + roles + ' | ' + executed_record + ' ' + pending_record + ' } | { ' + label_map + ' }'
-            
-            included_style = 'solid' if event in dcr.marking.included else 'dashed'
+            pending_record = ''
+            if event in dcr.marking.pending:
+                pending_record = '!'
+            executed_record = ''
+            if event in dcr.marking.executed:
+                executed_record = '&#x2713;'
+            label_map = ''
+            if event in dcr.label_map:
+                label_map = dcr.label_map[event]
+            label = '{ ' + roles  + ' | ' + executed_record + ' ' + pending_record + ' } | { ' + label_map + ' }'
+            included_style = 'solid'
+            if event not in dcr.marking.included:
+                included_style = 'dashed'
             viz.node(event, label, style=included_style, font_size=font_size)
 
     # Create nested clusters
     processed_groups = set()
 
     def add_to_cluster(group_name, parent_graph):
-        print(1)
         if group_name in processed_groups:
             return
         processed_groups.add(group_name)
         
-        #with parent_graph.subgraph(name='cluster_' + group_name) as s:
         with parent_graph.subgraph(name="cluster_"+group_name) as s:
             s.attr(label=group_name, style='rounded')
             
-            # Add nodes and nested clusters to this cluster
+            # Add nodes and nested clusters to current cluster
             for member in dcr.nestedgroups[group_name]:
                 if member in dcr.nestedgroups:
                     # Nested group, create a new cluster
                     add_to_cluster(member, s)
                 else:
-                    # This is a regular node, add it to current cluster
-                    pending_record = '!' if member in dcr.marking.pending else ''
-                    executed_record = '&#x2713;' if member in dcr.marking.executed else ''
-                    label_map = dcr.label_map[member] if member in dcr.label_map else ''
-                    label = '{ | ' + executed_record + ' ' + pending_record + ' } | { ' + label_map + ' }'
-                    included_style = 'solid' if member in dcr.marking.included else 'dashed'
+                    # Node, create same node
+                    pending_record = ''
+                    if member in dcr.marking.pending:
+                        pending_record = '!'
+                    executed_record = ''
+                    if member in dcr.marking.executed:
+                        executed_record = '&#x2713'
+                    label_map = ''
+                    if member in dcr.label_map:
+                        label_map = dcr.label_map[member]
+                    label = '{ ' + roles  + ' | ' + executed_record + ' ' + pending_record + ' } | { ' + label_map + ' }'
+                    included_style = 'solid'
+                    if member not in dcr.marking.included:
+                        included_style = 'dashed'
                     s.node(member, label, style=included_style, font_size=font_size)
 
     # Create all clusters starting from top-level groups
@@ -137,79 +147,127 @@ def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
             grouplist = list(dcr.nestedgroups[event])
             elem_s = grouplist[i]
             if elem_s in dcr.nestedgroups:
-                return find_head_or_tail(elem_s, i+1)
+                # Go inside cluster to look for nodes
+                return find_head_or_tail(elem_s, 0)
             else:
+                # # Go to next cluster of same depth
                 return elem_s
+                #i += 1
         else:
+            print("node")
             return event
 
     # Add all relations, including those involving clusters
     for event in dcr.conditions:
-        head = "cluster_"+event
-        source = find_head_or_tail(event, 0)
+        # If we have a group - set the edge to end there
+        if event in dcr.nestedgroups:
+            head = "cluster_"+event
+            source = find_head_or_tail(event, 0)
+        else:
+            # Behave as normal
+            head = None
+            source = event
         for event_prime in dcr.conditions[event]:
+            if event_prime in dcr.nestedgroups:
+                # If we have a group - set edge to start from there
+                tail = "cluster_"+event_prime
+                target = find_head_or_tail(event_prime,0)
+            else:
+                # Behave as normal
+                tail = None
+                target = event_prime
             time = None
-            tail = "cluster_"+event_prime
-            target = find_head_or_tail(event_prime,0)
             if hasattr(dcr, 'timedconditions') and event in dcr.timedconditions and event_prime in dcr.timedconditions[event]:
                 time = dcr.timedconditions[event][event_prime]
             create_edge(target, source, 'condition', viz, time, font_size, head=head, tail=tail)
 
     for event in dcr.responses:
-        tail = "cluster_"+event
-        print(f"Tail: {tail}")
-        source = find_head_or_tail(event, 0)
+        if event in dcr.nestedgroups:
+            # If we have a group - set edge to start from there
+            tail = "cluster_"+event
+            target = find_head_or_tail(event, 0)
+        else:
+            tail = None
+            target = event
         for event_prime in dcr.responses[event]:
+            if event_prime in dcr.nestedgroups:
+                # If we have a group - set the edge to end there
+                head = "cluster_"+event_prime
+                source = find_head_or_tail(event_prime, 0)
+            else:
+                head = None
+                source = event_prime
             time = None
-            head = "cluster_"+event_prime
-            print(f"Head: {head}")
-            target = find_head_or_tail(event_prime, 0)
             if hasattr(dcr, 'timedconditions') and event in dcr.timedconditions and event_prime in dcr.timedconditions[event]:
                 time = dcr.timedconditions[event][event_prime]
-            create_edge(source, target, 'response', viz, time, font_size, head=head, tail=tail)
+            create_edge(target, source, 'response', viz, time, font_size, head=head, tail=tail)
 
 
     for event in dcr.includes:
-        tail = "cluster_"+event
-        source = find_head_or_tail(event, 0)
+        if event in dcr.nestedgroups:
+            tail = "cluster_"+event
+            source = find_head_or_tail(event, 0)
+        else:
+            tail = None
+            source = event
         for event_prime in dcr.includes[event]:
-            head = "cluster_"+event_prime
-            target = find_head_or_tail(event_prime, 0)    
+            if event_prime in dcr.nestedgroups:
+                head = "cluster_"+event_prime
+                target = find_head_or_tail(event_prime, 0)    
+            else:
+                head = None
+                target = event_prime
             create_edge(source, target, 'include', viz, tail=tail, head=head)
 
     for event in dcr.excludes:
-        print(f"Event: {event}")
-        print(f"groups map: {list[dcr.nestedgroups.keys()]}")
-        if event in list[dcr.nestedgroups.keys()]:
+        if event in dcr.nestedgroups:
             tail = "cluster_"+event
+            source = find_head_or_tail(event, 0)
         else:
             tail = None
-        print(f"Tail: {tail}")
-        source = find_head_or_tail(event, 0)
-        print(f"Source: {source}")
+            source = event
         for event_prime in dcr.excludes[event]:
-            print(f"Event prime: {event_prime}")
-            head = "cluster_"+event_prime
-            target = find_head_or_tail(event_prime, 0)
-            print(f"Target: {target}")
+            if event_prime in dcr.nestedgroups:
+                head = "cluster_"+event_prime
+                target = find_head_or_tail(event_prime, 0)
+            else:
+                head = None
+                target = event_prime
             create_edge(source, target, 'exclude', viz, tail=tail, head=head)
+
 
     if hasattr(dcr, 'noresponses'):
         for event in dcr.noresponses:
-            tail = "cluster_"+event
-            source = find_head_or_tail(event, 0)
+            if event in dcr.nestedgroups:
+                tail = "cluster_"+event
+                source = find_head_or_tail(event, 0)
+            else:
+                tail = None
+                source = event
             for event_prime in dcr.noresponses[event]:
-                head = "cluster_"+event
-                target = find_head_or_tail(event_prime, 0)
+                if event_prime in dcr.nestedgroups:
+                    head = "cluster_"+event
+                    target = find_head_or_tail(event_prime, 0)
+                else:
+                    head = None
+                    target = event_prime
                 create_edge(event, event_prime, 'noresponse', viz)
 
     if hasattr(dcr, 'milestones'):
         for event in dcr.milestones:
-            tail = "cluster_"+event
-            source = find_head_or_tail(event, 0)
+            if event in dcr.nestedgroups:
+                tail = "cluster_"+event
+                source = find_head_or_tail(event, 0)
+            else:
+                tail = None
+                source = event
             for event_prime in dcr.milestones[event]:
-                head = "cluster_"+event_prime
-                target = find_head_or_tail(event_prime, 0)
+                if event_prime in dcr.nestedgroups:
+                    head = "cluster_"+event_prime
+                    target = find_head_or_tail(event_prime, 0)
+                else:
+                    head = None
+                    target = event_prime
                 create_edge(source, target, 'milestone', viz)
 
     viz.attr(overlap='false')
