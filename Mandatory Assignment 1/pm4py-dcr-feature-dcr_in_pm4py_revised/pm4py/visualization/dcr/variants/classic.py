@@ -60,7 +60,7 @@ def create_edge(source, target, relation, viz, time = None, font_size = None,tim
 
 
 
-def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
+def apply(dcr: TimedDcrGraph, parameters):
     if parameters is None:
         parameters = {}
 
@@ -142,19 +142,16 @@ def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
         if group not in processed_groups:
             add_to_cluster(group, viz)
 
-    def find_head_or_tail(event, i):
+        
+    def find_head_or_tail(event):
         if event in dcr.nestedgroups:
-            grouplist = list(dcr.nestedgroups[event])
-            elem_s = grouplist[i]
-            if elem_s in dcr.nestedgroups:
-                # Go inside cluster to look for nodes
-                return find_head_or_tail(elem_s, 0)
-            else:
-                # # Go to next cluster of same depth
-                return elem_s
-                #i += 1
+            # List of all nodes in a group
+            grouplist = [x for x in dcr.nestedgroups[event] if x not in dcr.nestedgroups]
+            if len(grouplist) == 0:
+                # If no nodes in a group, make a list of all groups in the group. Happens if a cluster, only containing clusters
+                grouplist = [x for x in dcr.nestedgroups[event] if x in dcr.nestedgroups]
+            return find_head_or_tail(grouplist[0])
         else:
-            print("node")
             return event
 
     # Add all relations, including those involving clusters
@@ -162,7 +159,7 @@ def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
         # If we have a group - set the edge to end there
         if event in dcr.nestedgroups:
             head = "cluster_"+event
-            source = find_head_or_tail(event, 0)
+            source = find_head_or_tail(event)
         else:
             # Behave as normal
             head = None
@@ -171,7 +168,7 @@ def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
             if event_prime in dcr.nestedgroups:
                 # If we have a group - set edge to start from there
                 tail = "cluster_"+event_prime
-                target = find_head_or_tail(event_prime,0)
+                target = find_head_or_tail(event_prime)
             else:
                 # Behave as normal
                 tail = None
@@ -185,7 +182,7 @@ def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
         if event in dcr.nestedgroups:
             # If we have a group - set edge to start from there
             tail = "cluster_"+event
-            target = find_head_or_tail(event, 0)
+            target = find_head_or_tail(event)
         else:
             tail = None
             target = event
@@ -193,7 +190,7 @@ def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
             if event_prime in dcr.nestedgroups:
                 # If we have a group - set the edge to end there
                 head = "cluster_"+event_prime
-                source = find_head_or_tail(event_prime, 0)
+                source = find_head_or_tail(event_prime)
             else:
                 head = None
                 source = event_prime
@@ -206,14 +203,14 @@ def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
     for event in dcr.includes:
         if event in dcr.nestedgroups:
             tail = "cluster_"+event
-            source = find_head_or_tail(event, 0)
+            source = find_head_or_tail(event)
         else:
             tail = None
             source = event
         for event_prime in dcr.includes[event]:
             if event_prime in dcr.nestedgroups:
                 head = "cluster_"+event_prime
-                target = find_head_or_tail(event_prime, 0)    
+                target = find_head_or_tail(event_prime)    
             else:
                 head = None
                 target = event_prime
@@ -222,14 +219,14 @@ def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
     for event in dcr.excludes:
         if event in dcr.nestedgroups:
             tail = "cluster_"+event
-            source = find_head_or_tail(event, 0)
+            source = find_head_or_tail(event)
         else:
             tail = None
             source = event
         for event_prime in dcr.excludes[event]:
             if event_prime in dcr.nestedgroups:
                 head = "cluster_"+event_prime
-                target = find_head_or_tail(event_prime, 0)
+                target = find_head_or_tail(event_prime)
             else:
                 head = None
                 target = event_prime
@@ -240,14 +237,14 @@ def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
         for event in dcr.noresponses:
             if event in dcr.nestedgroups:
                 tail = "cluster_"+event
-                source = find_head_or_tail(event, 0)
+                source = find_head_or_tail(event)
             else:
                 tail = None
                 source = event
             for event_prime in dcr.noresponses[event]:
                 if event_prime in dcr.nestedgroups:
                     head = "cluster_"+event
-                    target = find_head_or_tail(event_prime, 0)
+                    target = find_head_or_tail(event_prime)
                 else:
                     head = None
                     target = event_prime
@@ -257,14 +254,14 @@ def apply(dcr: TimedDcrGraph, parameters, head=None, tail=None):
         for event in dcr.milestones:
             if event in dcr.nestedgroups:
                 tail = "cluster_"+event
-                source = find_head_or_tail(event, 0)
+                source = find_head_or_tail(event)
             else:
                 tail = None
                 source = event
             for event_prime in dcr.milestones[event]:
                 if event_prime in dcr.nestedgroups:
                     head = "cluster_"+event_prime
-                    target = find_head_or_tail(event_prime, 0)
+                    target = find_head_or_tail(event_prime)
                 else:
                     head = None
                     target = event_prime
